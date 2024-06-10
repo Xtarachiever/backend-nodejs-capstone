@@ -69,17 +69,18 @@ router.post('/', upload.single('file'), async(req, res,next) => {
 // Get a single secondChanceItem by ID
 router.get('/:id', async (req, res, next) => {
     try {
+        const { id } = req.params;
         //Step 4: task 1 - insert code here
         const db = await connectToDatabase();
         //Step 4: task 2 - insert code here
-        const collection = await db.collection("secondChanceItem");
+        const collection = db.collection("secondChanceItems");
         //Step 4: task 3 - insert code here
-        const secondChanceItem = collection.findOne({id: id})
+        const secondChanceItem = await collection.findOne({id: id})
         //Step 4: task 4 - insert code here
         if(secondChanceItem){
             return res.status(200).json(secondChanceItem)
         }else{
-            return res.status(404).send("No item found by that ID")
+            return res.status(404).send(`No item found by that ID:${id}`)
         }
     } catch (e) {
         next(e);
@@ -89,12 +90,13 @@ router.get('/:id', async (req, res, next) => {
 // Update and existing item
 router.put('/:id', async(req, res,next) => {
     try {
+        const { id } = req.params;
         //Step 5: task 1 - insert code here
         const db = await connectToDatabase();
         //Step 5: task 2 - insert code here
-        const collection = await db.collection("secondChanceItem");
+        const collection = db.collection("secondChanceItems");
         //Step 5: task 3 - insert code here
-        const secondChanceItem = collection.findOne({id:id});
+        const secondChanceItem = await collection.findOne({id:id});
         //Step 5: task 4 - insert code here
         if(!secondChanceItem){
             return res.status(404).send("No item found by that ID")
@@ -121,6 +123,7 @@ router.put('/:id', async(req, res,next) => {
 // Delete an existing item
 router.delete('/:id', async(req, res,next) => {
     try {
+        const { id } = req.params;
         //Step 6: task 1 - insert code here
         const db = await connectToDatabase();
         //Step 6: task 2 - insert code here

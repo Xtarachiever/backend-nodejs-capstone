@@ -1,145 +1,38 @@
-const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const router = express.Router();
-const connectToDatabase = require('../models/db');
-const logger = require('../logger');
-// Define the upload directory path
-const directoryPath = 'public/images';
-
-// Set up storage for uploaded files
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, directoryPath); // Specify the upload directory
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname); // Use the original file name
-  },
-});
-
-const upload = multer({ storage: storage });
-
-
-// Get all secondChanceItems
-router.get('/', async (req, res, next) => {
-    logger.info('/ called');
-    try {
-        //Step 2: task 1 - insert code here
-        const db = await connectToDatabase();
-        //Step 2: task 2 - insert code here
-        const collection = db.collection("secondChanceItems");
-        //Step 2: task 3 - insert code here
-        const secondChanceItems = await collection.find({}).toArray();
-        //Step 2: task 4 - insert code here
-        res.json(secondChanceItems);
-
-    } catch (e) {
-        logger.console.error('oops something went wrong', e)
-        next(e);
-    }
-});
-
-// Add a new item
-router.post('/', upload.single('file'), async(req, res,next) => {
-    try {
-
-        //Step 3: task 1 - insert code here
-        const db = await connectToDatabase();
-        //Step 3: task 2 - insert code here
-        const collection = db.collection("secondChanceItems");
-        //Step 3: task 3 - insert code here
-        let secondChanceItem = req.body;
-        //Step 3: task 4 - insert code here
-        const lastItemQuery = await collection.find().sort({'id':-1}).limit(1);
-        await lastItemQuery.forEach(item => {
-            secondChanceItem.id = (parseInt(item.id) + 1).toString();
-        });
-        const date_added = Math.floor(new Date().getTime() / 1000);
-        secondChanceItem.date_added = date_added
-        //Step 3: task 5 - insert code here
-        secondChanceItem = await collection.insertOne(secondChanceItem);
-        res.status(201).json(secondChanceItem[0]);
-    } catch (e) {
-        next(e);
-    }
-});
-
-// Get a single secondChanceItem by ID
-router.get('/:id', async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        //Step 4: task 1 - insert code here
-        const db = await connectToDatabase();
-        //Step 4: task 2 - insert code here
-        const collection = db.collection("secondChanceItems");
-        //Step 4: task 3 - insert code here
-        const secondChanceItem = await collection.findOne({id: id})
-        //Step 4: task 4 - insert code here
-        if(secondChanceItem){
-            return res.status(200).json(secondChanceItem)
-        }else{
-            return res.status(404).send(`No item found by that ID:${id}`)
-        }
-    } catch (e) {
-        next(e);
-    }
-});
-
-// Update and existing item
-router.put('/:id', async(req, res,next) => {
-    try {
-        const { id } = req.params;
-        //Step 5: task 1 - insert code here
-        const db = await connectToDatabase();
-        //Step 5: task 2 - insert code here
-        const collection = db.collection("secondChanceItems");
-        //Step 5: task 3 - insert code here
-        const secondChanceItem = await collection.findOne({id:id});
-        //Step 5: task 4 - insert code here
-        if(!secondChanceItem){
-            return res.status(404).send("No item found by that ID")
-        }
-        secondChanceItem.category = req.body.category;
-        secondChanceItem.condition = req.body.condition;
-        secondChanceItem.age_days = req.body.age_days;
-        secondChanceItem.description = req.body.description;
-        secondChanceItem.age_years = Number((secondChanceItem.age_days/365).toFixed(1));
-        secondChanceItem.updatedAt = new Date();
-
-        const updateItem = await collection.findOneAndUpdate({id},{$set:secondChanceItem},{returnDocument:'after'})
-        //Step 5: task 5 - insert code here
-        if(updateItem){
-            return res.status(200).json({message:"Item successfully updated"})
-        }else{
-            res.json({"uploaded":"failed"});
-        }
-    } catch (e) {
-        next(e);
-    }
-});
-
-// Delete an existing item
-router.delete('/:id', async(req, res,next) => {
-    try {
-        const { id } = req.params;
-        //Step 6: task 1 - insert code here
-        const db = await connectToDatabase();
-        //Step 6: task 2 - insert code here
-        const collection = db.collection("secondChanceItem");
-        //Step 6: task 3 - insert code here
-        const secondChanceItem = await collection.findOne({id:id});
-        if(!secondChanceItem){
-            logger.error('secondChanceItem not found');
-            return res.status(404).json({error:"No item found by that ID"})
-        }
-        //Step 6: task 4 - insert code here
-        await collection.deleteOne({id});
-        res.json({"deleted":"success"});
-    } catch (e) {
-        next(e);
-    }
-});
-
-
-module.exports = router;
+require('dotenv').config()
+const express = require('express')
+const cors = require('cors')
+const pinoLogger = require('./logger')
+const path = require('path')
+const connectToDatabase = require('./models/db')
+const app = express()
+app.use('*', cors())
+const port = 3060
+// Connect to MongoDB; we just do this one time
+connectToDatabase().then(() => {
+  pinoLogger.info('Connected to DB')
+})
+  .catch((e) => console.error('Failed to connect to DB', e))
+app.use(express.json())
+// Route files
+const secondChanceRoutes = require('./routes/secondChanceItemsRoutes')
+const authRoutes = require('./routes/authRoutes')
+const searchRoutes = require('./routes/searchRoutes')
+const pinoHttp = require('pino-http')
+const logger = require('./logger')
+app.use(pinoHttp({ logger }))
+app.use(express.static(path.join(__dirname, 'public')))
+// Use Routes
+app.use('/api/secondchance/items', secondChanceRoutes)
+app.use('/api/auth', authRoutes)
+app.use('/api/secondchance/search', searchRoutes)
+// Global Error Handler
+app.use((err, req, res) => {
+  console.error(err)
+  res.status(500).send('Internal Server Error')
+})
+app.get('/', (req, res) => {
+  res.send('Inside the server')
+})
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`)
+})
